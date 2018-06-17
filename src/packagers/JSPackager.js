@@ -119,7 +119,7 @@ class JSPackager extends Packager {
 
     // Add all dependencies as well
     for (let child of asset.depAssets.values()) {
-      await this.addAssetToBundle(child, this.bundle);
+      await this.addAssetToBundle(child);
     }
 
     await this.addAsset(asset);
@@ -171,11 +171,12 @@ class JSPackager extends Packager {
         }
       }
 
+      loads += 'b.load(' + JSON.stringify(preload) + ')';
       if (this.bundle.entryAsset) {
-        preload.push(this.bundle.entryAsset.id);
+        loads += `.then(function(){require(${this.bundle.entryAsset.id});})`;
       }
 
-      loads += 'b.load(' + JSON.stringify(preload) + ');';
+      loads += ';';
     }
 
     // Asset ids normally start at 1, so this should be safe.
