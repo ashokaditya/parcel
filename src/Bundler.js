@@ -20,7 +20,7 @@ const installPackage = require('./utils/installPackage');
 const bundleReport = require('./utils/bundleReport');
 const prettifyTime = require('./utils/prettifyTime');
 const getRootDir = require('./utils/getRootDir');
-const glob = require('glob');
+const glob = require('fast-glob');
 
 /**
  * The Bundler is the main entry point. It resolves and loads assets,
@@ -81,7 +81,7 @@ class Bundler extends EventEmitter {
 
     // Match files as globs
     return entryFiles
-      .reduce((p, m) => p.concat(glob.sync(m, {nonull: true})), [])
+      .reduce((p, m) => p.concat(glob.sync(m)), [])
       .map(f => Path.resolve(f));
   }
 
@@ -301,7 +301,11 @@ class Bundler extends EventEmitter {
       return this.mainBundle;
     } catch (err) {
       this.error = err;
+
       logger.error(err);
+
+      this.emit('buildError', err);
+
       if (this.hmr) {
         this.hmr.emitError(err);
       }
@@ -581,7 +585,7 @@ class Bundler extends EventEmitter {
       asset.parentDeps.add(dep);
     }
 
-    if (asset.parentBundle) {
+    if (asset.parentBundle && !bundle.isolated) {
       // If the asset is already in a bundle, it is shared. Move it to the lowest common ancestor.
       if (asset.parentBundle !== bundle) {
         let commonBundle = bundle.findCommonAncestor(asset.parentBundle);
@@ -612,7 +616,7 @@ class Bundler extends EventEmitter {
       }
 
       // Create a new bundle for dynamic imports
-      bundle = bundle.createChildBundle(asset);
+      bundle = bundle.createChildBundle(asset, dep);
     } else if (asset.type && !this.packagers.has(asset.type)) {
       // If the asset is already the entry asset of a bundle, don't create a duplicate.
       if (isEntryAsset) {
@@ -661,7 +665,9 @@ class Bundler extends EventEmitter {
     }
 
     for (let bundle of Array.from(asset.bundles)) {
-      bundle.removeAsset(asset);
+      if (!bundle.isolated) {
+        bundle.removeAsset(asset);
+      }
       commonBundle.getSiblingBundle(bundle.type).addAsset(asset);
     }
 
